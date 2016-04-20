@@ -1,0 +1,3 @@
+Segment#  Trans_direction     Timestamp             Source         Destination    Sequence # ACK #  ACK  FIN  EstimateRTT(s) Timeout(s)     Trans_status   resend_marks
+1         Sender -> Receiver  19,Apr,2016 02:54:49  160.39.224.22  localhost      0          0      1    0    2              2              Timeout                  
+1         Sender -> Receiver  19,Apr,2016 02:54:51  160.39.224.22  localhost      0          0      1    0    2              2              Timeout        Timeout_resend

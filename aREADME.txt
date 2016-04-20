@@ -10,7 +10,7 @@ All rights reserved.
 
 a. A brief description of the code
 
-This is a simplified TCP-like transport layer protocol program for reliable transferring, based on socket programming and multi-thread processing. It contains two code files (sender.py & receiver.py) and a sample file (sender_file.txt) attached for testing. The sender and receiver program can be invoked in given format. (details at section e) And then the file in sender side (e.g. sender_file.txt if used) will be send to the receiver at given IP address and port. It can survive packet loss, pack corruption, pack duplication and delays. (Because I do not implement functions for window side more than 1, it is a STOP-AND-WAIT PROTOCOL. So there will be no reorder even if we use the proxy to emulate that. 
+This is a simplified TCP-like transport layer protocol program for reliable transferring, based on socket programming and multi-thread processing. It contains two code files (sender.py & receiver.py) and a sample file (sender_file.txt) attached for testing. The sender and receiver program can be invoked in given format. (details at section e) And then the file in sender side (e.g. sender_file.txt if used) will be send to the receiver at given IP address and port. It can survive packet loss, pack corruption, pack duplication and delays. (Because I do not implement functions for window side more than 1, it is a STOP-AND-WAIT PROTOCOL. So there will be no reorder even if we use the proxy to emulate that.
 
 The brief structure of the two python files are as follows.
 sender.py:
@@ -47,8 +47,8 @@ Notes: The total length of header is 20 Byte. Unused bits in the header are set 
 
 sender:
 -SEND DATA: The sender will send next segment if the last segment is acknowledged to be received successfully
--FAILED RESED: The sender will resend last already sent segment if it is acknowledged to be not received successfully (with corruption) 
--TIMEOUT RESEND: The sender will resend last already sent segment if it does not receive the acknowledgment in expected time (may due to delay or loss) 
+-FAILED RESED: The sender will resend last already sent segment if it is acknowledged to be not received successfully (with corruption)
+-TIMEOUT RESEND: The sender will resend last already sent segment if it does not receive the acknowledgment in expected time (may due to delay or loss)
 
 receiver:
 -RECEIVE PACKET WITHOUT CORRUPTION: If a packet received is new and without corruption, the receiver will receive the packet and write the data to the file. Then send a ACK with expectation for next segment.
@@ -116,7 +116,7 @@ ACK receiving port:       4118
 Sender side IP:           127.0.1.1
 ------------------------------------------------------------------------------
 >> File sending...
->> Transmission time: 1 min 6 s, speed: 64.93 B/s, finished 100%       
+>> Transmission time: 1 min 6 s, speed: 64.93 B/s, finished 100%
 ------------------------------------------------------------------------------
 Total bytes sent:                                  8111
 Total Segments sent:                               37
@@ -137,21 +137,21 @@ f. Additional functions
 [DESRIPTION] Some addition items is added to the log files. Let’s take a look at it.
 
 Segment#  Trans_direction     Timestamp             Source         Destination    Sequence # ACK #  ACK  FIN  EstimateRTT(s) Timeout(s)     Trans_status   resend_marks
-1         Sender -> Receiver  06,Nov,2014 19:53:53  127.0.1.1      127.0.1.1      0          0      1    0    1.96477398276  2.21135610342  Failed                   
--         Receiver -> Sender  06,Nov,2014 19:53:53  127.0.1.1      127.0.1.1      0          0      1    0    -              -              Received       -         
+1         Sender -> Receiver  06,Nov,2014 19:53:53  127.0.1.1      127.0.1.1      0          0      1    0    1.96477398276  2.21135610342  Failed
+-         Receiver -> Sender  06,Nov,2014 19:53:53  127.0.1.1      127.0.1.1      0          0      1    0    -              -              Received       -
 1         Sender -> Receiver  06,Nov,2014 19:53:55  127.0.1.1      127.0.1.1      0          1      1    0    1.93254335597  2.34309433401  Failed         Corrup_resend
--         Receiver -> Sender  06,Nov,2014 19:53:55  127.0.1.1      127.0.1.1      1          0      1    0    -              -              Received       -         
+-         Receiver -> Sender  06,Nov,2014 19:53:55  127.0.1.1      127.0.1.1      1          0      1    0    -              -              Received       -
 1         Sender -> Receiver  06,Nov,2014 19:53:57  127.0.1.1      127.0.1.1      0          2      1    0    1.90478206566  2.40702433139  Succeed        Corrup_resend
--         Receiver -> Sender  06,Nov,2014 19:53:57  127.0.1.1      127.0.1.1      2          576    1    0    -              -              Received       -         
-2         Sender -> Receiver  06,Nov,2014 19:53:58  127.0.1.1      127.0.1.1      576        3      1    0    1.88038168132  2.427866071    Succeed                  
--         Receiver -> Sender  06,Nov,2014 19:53:58  127.0.1.1      127.0.1.1      3          1152   1    0    -              -              Received       -         
-3         Sender -> Receiver  06,Nov,2014 19:54:00  127.0.1.1      127.0.1.1      1152       4      1    0    1.85876234926  2.42071096593  Succeed                  
--         Receiver -> Sender  06,Nov,2014 19:54:00  127.0.1.1      127.0.1.1      4          1728   1    0    -              -              Received       -         
-4         Sender -> Receiver  06,Nov,2014 19:54:02  127.0.1.1      127.0.1.1      1728       5      1    0    1.83988358068  2.39349642324  Succeed                  
--         Receiver -> Sender  06,Nov,2014 19:54:02  127.0.1.1      127.0.1.1      5          2304   1    0    -              -              Received       -         
-5         Sender -> Receiver  06,Nov,2014 19:54:04  127.0.1.1      127.0.1.1      2304       6      1    0    1.82343639236  2.3537763425   Succeed                  
--         Receiver -> Sender  06,Nov,2014 19:54:04  127.0.1.1      127.0.1.1      6          2880   1    0    -              -              Received       -         
-6         Sender -> Receiver  06,Nov,2014 19:54:06  127.0.1.1      127.0.1.1      2880       7      1    0    1.82343639236  2.3537763425   Timeout                  
+-         Receiver -> Sender  06,Nov,2014 19:53:57  127.0.1.1      127.0.1.1      2          576    1    0    -              -              Received       -
+2         Sender -> Receiver  06,Nov,2014 19:53:58  127.0.1.1      127.0.1.1      576        3      1    0    1.88038168132  2.427866071    Succeed
+-         Receiver -> Sender  06,Nov,2014 19:53:58  127.0.1.1      127.0.1.1      3          1152   1    0    -              -              Received       -
+3         Sender -> Receiver  06,Nov,2014 19:54:00  127.0.1.1      127.0.1.1      1152       4      1    0    1.85876234926  2.42071096593  Succeed
+-         Receiver -> Sender  06,Nov,2014 19:54:00  127.0.1.1      127.0.1.1      4          1728   1    0    -              -              Received       -
+4         Sender -> Receiver  06,Nov,2014 19:54:02  127.0.1.1      127.0.1.1      1728       5      1    0    1.83988358068  2.39349642324  Succeed
+-         Receiver -> Sender  06,Nov,2014 19:54:02  127.0.1.1      127.0.1.1      5          2304   1    0    -              -              Received       -
+5         Sender -> Receiver  06,Nov,2014 19:54:04  127.0.1.1      127.0.1.1      2304       6      1    0    1.82343639236  2.3537763425   Succeed
+-         Receiver -> Sender  06,Nov,2014 19:54:04  127.0.1.1      127.0.1.1      6          2880   1    0    -              -              Received       -
+6         Sender -> Receiver  06,Nov,2014 19:54:06  127.0.1.1      127.0.1.1      2880       7      1    0    1.82343639236  2.3537763425   Timeout
 6         Sender -> Receiver  06,Nov,2014 19:54:08  127.0.1.1      127.0.1.1      2880       7      1    0    1.82343639236  2.3537763425   Timeout        Timeout_resend
 6         Sender -> Receiver  06,Nov,2014 19:54:10  127.0.1.1      127.0.1.1      2880       7      1    0    1.80908822654  2.30728034987  Failed         Timeout & Corrup_resend
 
@@ -173,13 +173,13 @@ This is part of rows for the sender_logfile. For each column, its representation
 
 -ACK: ACK flag in the header, always be 1.
 
--FIN: FIN flag in the header. It is 0 for most sending packets and 1 for the last packet. (not presented above)  
-   
+-FIN: FIN flag in the header. It is 0 for most sending packets and 1 for the last packet. (not presented above)
+
 -EstimatedRTT(s): Estimated RTT updates for each trip. It will finally converge to the delay time set in the proxy.
 
 -Timeout(s): TimeoutInterval updates for each trip. It will finally converge to the delay time set in the proxy.
 
--Trans_status: 
+-Trans_status:
 For Sender -> Receiver, there are THREE status: Failed (received with corruption), Succeed (received without corruption), Timeout (do not response in the time interval)
 For Receiver -> Sender, there is ONLY ONE status: Received (It is because the ACK packet from receiver to sender is sent by TCP, so it will always received correctly)
 
@@ -190,7 +190,7 @@ Timeout & Corrup_resend: LAST packet is used to resend for a timeout packet but 
 Corrp & Timeout_resend(not presented in the sample): LAST packet is used to resend for a corruption packet but we do not get response for THIS packet(indicates that last packet is ‘Failed’ while this is ‘Timeout’)
 
 The columns in receive log file are only part of the sender log file, so we do not describe here.
- 
+
 This implementation can be used for the controller now the exact details about the transmission.
 
 2) Transmission time, instant speed and finishing percentage display
@@ -214,6 +214,6 @@ NOTE: instant speed equals to Bytes transmitted in a segment over the time it co
 Thanks for reading the README.txt. Because of time limited, quite a lot other essential functionalities I came up with (e.g. pipeline) can not be completed. And there is also possible to have some BUGs I haven’t found out. It needs the feedback from the user experiences. But I am sure there will be no big problems in the program.
 
 Kevin Li
-6TH NOV 2014 
+6TH NOV 2014
 *****************************************************************************************
 
