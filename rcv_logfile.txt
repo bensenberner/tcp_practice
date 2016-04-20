@@ -1,0 +1,4 @@
+Segment#  Trans_direction     Timestamp             Source         Destination    Sequence#  ACK#   ACK  FIN  Trans_status
+1         Sender -> Receiver  19,Apr,2016 14:28:11  127.0.0.1      192.168.188.2050          0      1    0    Received
+Segment#  Trans_direction     Timestamp             Source         Destination    Sequence#  ACK#   ACK  FIN  Trans_status
+1         Sender -> Receiver  19,Apr,2016 14:28:29  127.0.0.1      192.168.188.2050          0      1    0    Received
