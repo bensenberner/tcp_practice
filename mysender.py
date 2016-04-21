@@ -17,9 +17,7 @@ WIN_END = 0
 
 def readfile(filename):
     "To read the data that will be sent from the file"
-
     packets = []
-    # Open the file from the name specified in the command line
     try:
         statinfo = os.stat(filename)
         filesize = statinfo.st_size
@@ -37,26 +35,44 @@ def readfile(filename):
 
     return packets
 
-# TODO: make this into a "make packet" kinda thing
-def rft_header(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datapacket):
+def make_packet(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datapacket):
     "To pack the reliable file transfer data with TCP-like header"
-
-    #To determine the value of flag part in the header
-    if ACK_flag == 0 and FIN_flag == 0:
-        flagpart = 0         #0x0000
-    elif ACK_flag == 0 and FIN_flag == 1:
-        flagpart = 1         #0x0001
-    elif ACK_flag == 1 and FIN_flag == 0:
-        flagpart = 16        #0x0010
-    elif ACK_flag == 1 and FIN_flag == 1:
-        flagpart = 17        #0x0011
-
+    flagpart = makeflags(ACK_flag, FIN_flag)
+    option = 0
     #To pack the header in a size of 20 bytes header and MAXSEGMENTSIZE of segment
     header = struct.pack('!HHIIHHHH%ds' % len(datapacket), source_port, dest_port,
-            seq_num, ack_num, flagpart, window_size, checksum, 0, datapacket)
+            seq_num, ack_num, flagpart, window_size, checksum, option, datapacket)
 
     return header
 
+def makeflags(ackflag, finflag):
+    if ackflag == 0 and finflag == 0:
+        flagpart = 0         #0x0000
+    elif ackflag == 0 and finflag == 1:
+        flagpart = 1         #0x0001
+    elif ackflag == 1 and finflag == 0:
+        flagpart = 16        #0x0010
+    elif ackflag == 1 and finflag == 1:
+        flagpart = 17        #0x0011
+    else:
+        print('invalid flags')
+        flagpart = 0
+    return flagpart
+
+def getflags(flags):
+    if flags == 0:
+        ackflag = 0
+        finflag = 0
+    elif flags == 1:
+        ackflag = 0
+        finflag = 1
+    elif flags == 16:
+        ackflag = 1
+        finflag = 0
+    elif flags == 17:
+        ackflag = 1
+        finflag = 1
+    return ackflag, finflag
 
 def transmit_packet(packet, seq_num, UDPsendsocket, UDP_ADDR):
     global connection_lock
@@ -89,21 +105,11 @@ def dealWithACK(ack_sock):
         received = struct.unpack('!HHIIHHHH%ds' % string_size, ACK[0])
         (source_port, dest_port, seq_num, ack_num, flagpart,
                 window_size, checksum, option, datachunk) = received
-        if flagpart == 0:
-            ackflag = 0
-            finflag = 0
-        elif flagpart == 1:
-            ackflag = 0
-            finflag = 1
-        elif flagpart == 16:
-            ackflag = 1
-            finflag = 0
-        elif flagpart == 17:
-            ackflag = 1
-            finflag = 1
-        connection_lock.acquire()
-        window[ack_num]['ack'] = True
-        connection_lock.release()
+        ackflag, finflag = getflags(flagpart)
+        if ackflag:
+            connection_lock.acquire()
+            window[ack_num]['ack'] = True
+            connection_lock.release()
 
 def main():
     global connection_lock
@@ -144,11 +150,6 @@ def main():
     except:
         window_size = 1
 
-    #Initialization of the object of Sender class
-    # rft_sender = Sender(filename, recv_IP, recv_port, ack_port_num, log_filename, window_size)
-    with open(filename) as f:
-        total_sending_message = f.read()
-
     # UDP socket for SENDING DATA
     UDPsendsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     UDP_SEND_HOST = recv_IP
@@ -169,9 +170,9 @@ def main():
     ack_thread.start()
 
     # TODO
-    # sumstring = rft_header(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, 0, rft_sender.total_sending_message[SENDINGPOINTER])
+    # sumstring = make_packet(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, 0, rft_sender.total_sending_message[SENDINGPOINTER])
     # rft_checksum = checksum_calc(sumstring)
-    # sendpacket = rft_header(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, rft_checksum, rft_sender.total_sending_message[SENDINGPOINTER])
+    # sendpacket = make_packet(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, rft_checksum, rft_sender.total_sending_message[SENDINGPOINTER])
 
     # CREATE THE WINDOW
     packets = readfile(filename)
@@ -206,7 +207,7 @@ def main():
                 FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
                 # TODO: make this real
                 rft_checksum = 0
-                sendpacket = rft_header(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
                         ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
                 try:
                     transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
@@ -230,12 +231,13 @@ def main():
                 FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
                 # TODO: make this real
                 rft_checksum = 0
-                sendpacket = rft_header(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
                         ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
                 try:
                     transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
                 except socket.error, msg:
                     print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
                     sys.exit()
+
 if __name__ == '__main__':
     main()

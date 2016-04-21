@@ -1,4 +1,3 @@
-#---------------------Source Import--------------------
 import sys
 import socket
 import thread
@@ -7,45 +6,11 @@ import time
 from time import strftime
 import struct
 
-#------------------------Variables---------------------
 MAXSEGMENTSIZE = 576                   # File will be divided into this size of segments to be transferred
 FIRST_CORRUPTION = False               # The flag of first receiving
 ACK_ACK = 0                            # ACK # used to send ACK back to sender
 ACK_SEQUENCE = 0                       # Sequence # used to send ACK back to sender
 TRANS_FINISH = False                   # The flag to mark if the transmission is finished
-
-#-------------------------Classes----------------------
-class Receiver:
-    'The class used to describe the receiver'
-
-    def __init__(self, wrto_file, listening_port, sender_IP, sender_ack_port, log_file):
-        "To initialize the class with variables"
-        self.wrto_filename = wrto_file
-        self.listening_port = listening_port
-        self.sender_IP = sender_IP
-        self.sender_ack_port = sender_ack_port
-        self.log_filename = log_file
-
-    def displayReceiver(self):
-        "To display the variables of the class (just for testing)"
-
-        print 'Saved filename:'.ljust(30), self.wrto_filename
-        print 'Receiver side log filename:'.ljust(30), self.log_filename
-        print 'Sender IP:'.ljust(30), self.sender_IP
-        print 'Sender port:'.ljust(30), self.sender_ack_port
-        print 'Receiver listening port:'.ljust(30), self.listening_port
-
-    def filewriting(self, data):
-        "To write received data to the file"
-
-        # Open the file from the name specified in the command line
-        try:
-            # TODO: shouldn't this be a binary write
-            Datafile = open(self.wrto_filename,"a")
-            Datafile.write(data)
-            Datafile.close()
-        except:
-            print 'File not found'
 
 def rft_header(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datachunk):
     "To pack the reliable file transfer data with TCP-like header"
@@ -60,20 +25,27 @@ def rft_header(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, win
     elif ACK_flag == 1 and FIN_flag == 1:
         flagpart = 17        #0x0011
 
+    option = 0
     #To pack the header in a size of 20 bytes header and MAXSEGMENTSIZE of segment
-    header = struct.pack('!HHIIHHHH%ds' % \
-            len(datachunk),
-            source_port,
-            dest_port,
-            seq_num,
-            ack_num,
-            flagpart,
-            window_size,
-            checksum,
-            0,
-            datachunk)
+    header = struct.pack('!HHIIHHHH%ds' % \ len(datachunk), source_port, dest_port,
+            seq_num, ack_num, flagpart, window_size, checksum, option, datachunk)
 
     return header
+
+def getflags(flags):
+    if flags == 0:
+        ackflag = 0
+        finflag = 0
+    elif flags == 1:
+        ackflag = 0
+        finflag = 1
+    elif flags == 16:
+        ackflag = 1
+        finflag = 0
+    elif flags == 17:
+        ackflag = 1
+        finflag = 1
+    return ackflag, finflag
 
 if __name__ == '__main__':
     #Invoke the program to import <filename>, <listening_port>, <sender_IP>, <sender_ack_port> and <log_filename>
@@ -94,9 +66,6 @@ if __name__ == '__main__':
         print '<sender_ack_port> should be an integrate.'
         sys.exit()
     log_filename = sys.argv[5]
-
-    #Initialization of the object of Receiver class
-    rft_receiver = Receiver(filename, listening_port, sender_IP, sender_ack_port, log_filename)
 
     # set up a UDP socket for sending ACKs
     UDP_ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -127,18 +96,7 @@ if __name__ == '__main__':
     received = struct.unpack('!HHIIHHHH%ds' % string_size, receiveddata[0])
     (sender_port, recv_port, seq_num, ack_num, flagpart,
             window_size, checksum, option, datachunk) = received
-    if flagpart == 0:
-        ackflag = 0
-        finflag = 0
-    elif flagpart == 1:
-        ackflag = 0
-        finflag = 1
-    elif flagpart == 16:
-        ackflag = 1
-        finflag = 0
-    elif flagpart == 17:
-        ackflag = 1
-        finflag = 1
+    ackflag, finflag = getflags(flagpart)
     # TODO: write the first data
 
     RCV_SEQ_NUM = 0
@@ -149,18 +107,7 @@ if __name__ == '__main__':
         received = struct.unpack('!HHIIHHHH%ds' % string_size, receiveddata[0])
         (sender_port, recv_port, seq_num, ack_num, flagpart,
                 window_size, checksum, option, datachunk) = received
-        if flagpart == 0:
-            ackflag = 0
-            finflag = 0
-        elif flagpart == 1:
-            ackflag = 0
-            finflag = 1
-        elif flagpart == 16:
-            ackflag = 1
-            finflag = 0
-        elif flagpart == 17:
-            ackflag = 1
-            finflag = 1
+        ackflag, finflag = getflags(flagpart)
 
         # do the checksum shit
         checksum = True
@@ -204,7 +151,6 @@ if __name__ == '__main__':
             # else drop the packet
             else:
                 pass
-
 
         # else if checksum is bad
         else:
