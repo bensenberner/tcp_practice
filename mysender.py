@@ -44,6 +44,7 @@ def readfile(filename):
             packets.append(packet)
     except:
         print 'File not found'
+        finished = True
         sys.exit(1)
 
     return packets
@@ -129,38 +130,42 @@ def dealWithACK(ack_sock, recv_IP, log_filename):
     # TODO: make some kind of indicator to show when there are no more ACKs
     # to be received. Perhaps you should move the logic to increment the window
     # pointers to within here?
-    while not finished:
-        # wait for an ACK message
-        try:
-            ACK = ack_sock.recvfrom(1024)
-        except:
-            print 'Error receiving ACK'
-            sys.exit(1)
+    try:
+        while not finished:
+            # wait for an ACK message
+            try:
+                ACK = ack_sock.recvfrom(1024)
+            except:
+                print 'Error receiving ACK'
+                finished = True
+                sys.exit(1)
 
-        string_size = len(ACK[0]) - 20 # for the header
-        received = struct.unpack('!HHIIHHHH%ds' % string_size, ACK[0])
-        (source_port, dest_port, seq_num, ack_num, flagpart,
-                window_size, checksum, option, datachunk) = received
-        ack_flag, fin_flag = getflags(flagpart)
-        # TODO: log the ACK/NAK
-        # ACKed properly
-        if ack_flag:
-            connection_lock.acquire()
-            window[ack_num]['ack'] = True
-            connection_lock.release()
-        # NAKed
-        else:
-            pass
-        sample_RTT = time.time() - window[ack_num]['time']
-        estimated_RTT = (1 - alpha) * estimated_RTT + alpha * sample_RTT
-        dev_RTT = (1 - beta) * dev_RTT + beta * abs(sample_RTT - estimated_RTT)
-        timeout_interval = estimated_RTT + 4 * dev_RTT
+            string_size = len(ACK[0]) - 20 # for the header
+            received = struct.unpack('!HHIIHHHH%ds' % string_size, ACK[0])
+            (source_port, dest_port, seq_num, ack_num, flagpart,
+                    window_size, checksum, option, datachunk) = received
+            ack_flag, fin_flag = getflags(flagpart)
+            # TODO: log the ACK/NAK
+            # ACKed properly
+            if ack_flag:
+                connection_lock.acquire()
+                window[ack_num]['ack'] = True
+                connection_lock.release()
+            # NAKed
+            else:
+                pass
+            sample_RTT = time.time() - window[ack_num]['time']
+            estimated_RTT = (1 - alpha) * estimated_RTT + alpha * sample_RTT
+            dev_RTT = (1 - beta) * dev_RTT + beta * abs(sample_RTT - estimated_RTT)
+            timeout_interval = estimated_RTT + 4 * dev_RTT
 
-        # log the ACK
-        timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
-        source = recv_IP
-        destination = socket.gethostbyname(socket.gethostname())
-        write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ack_flag, fin_flag, estimated_RTT)
+            # log the ACK
+            timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+            source = recv_IP
+            destination = socket.gethostbyname(socket.gethostname())
+            write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ack_flag, fin_flag, estimated_RTT)
+    except KeyboardInterrupt:
+        sys.exit(1)
 
 def checksum_verify(sumstring):
     "To verify the received data"
@@ -191,37 +196,46 @@ def main():
     global alpha, beta, sample_RTT, estimated_RTT, dev_RTT, timeout_interval
     global finished
 
-
     # TODO TODO TODO
     # TODO: MAKE SURE ALL THESE PORTS ARE RIGHT AND RENAME THEM
-    #Invoke the program to import <filename>, <recv_IP>, <recv_port>, <ack_port_num>, <log_filename> and <window_size>
+    #Invoke the program to import <filename>, <recv_IP>, <recv_port>, <ack_port_num>, <log_filename> <window_size>
+    #                      sender <filename> <remote_IP> <remote_port> <ack_port_num> <log_filename> <window_size>
     if(len(sys.argv) != 6 and len(sys.argv) != 7):
         print 'Please follow the format to invoke the program:'
-        print 'python sender.py <filename> <recv_IP> <recv_port> <ack_port_num> <log_filename> <window_size>'
+        print 'python sender.py <filename> <remote_IP> <remote_port> <ack_port_num> <log_filename> <window_size>'
         print '<window_siz> is optional'
+        finished = True
         sys.exit()
 
     filename = sys.argv[1]
-    recv_IP = sys.argv[2]
+    try:
+        recv_IP = socket.gethostbyname(sys.argv[2])
+    except:
+        print 'remote_IP error'
+        finished = True
+        sys.exit(1)
 
     #Check the integer values
     try:
         recv_port = int(sys.argv[3])
     except ValueError:
         print '<recv_port> should be an integer.'
-        sys.exit()
+        finished = True
+        sys.exit(1)
     try:
         ack_port_num = int(sys.argv[4])
     except ValueError:
         print '<ack_port_num> should be an integer.'
-        sys.exit()
+        finished = True
+        sys.exit(1)
     log_filename = sys.argv[5]
     #Choose a window_size from command, otherwise using a default value
     try:
         window_size = int(sys.argv[6])
     except ValueError:
-        print '<window_size> should be an integrate'
-        sys.exit()
+        print '<window_size> should be an integer'
+        finished = True
+        sys.exit(1)
     except:
         window_size = 1
 
@@ -229,25 +243,21 @@ def main():
     write_logfile(log_filename, 'timestamp', 'source', 'destination', 'seq_num', 'ack_num', 'ack_flag', 'fin_flag', 'est_RTT')
     # UDP socket for SENDING DATA
     UDPsendsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # TODO: do not hardcode this
-    UDP_SEND_HOST = recv_IP
-    UDP_SEND_HOST = '127.0.0.1'
-    UDP_SEND_PORT = recv_port
-    UDP_SEND_ADDR = (UDP_SEND_HOST, UDP_SEND_PORT)
+    UDP_SEND_ADDR = (recv_IP, recv_port)
 
     # UDP socket for RECEIVING ACKs
     UDPacksocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # TODO: do not hardcode this.
-    UDPackhost = '127.0.0.1'
+    UDPackhost = socket.gethostbyname(socket.gethostname())
     UDP_ACK_ADDR = (UDPackhost, ack_port_num)
     try:
         UDPacksocket.bind(UDP_ACK_ADDR)
     except socket.error, msg:
         print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+        finished = True
         sys.exit()
     # send it into its own thread
     ack_thread = threading.Thread(target = dealWithACK, args = (UDPacksocket, recv_IP, log_filename))
-    # ack_thread.setDaemon(True)
+    ack_thread.setDaemon(True)
     ack_thread.start()
 
     # TODO: checksum shit
@@ -261,85 +271,91 @@ def main():
     WIN_START = 0
     WIN_END = window_size - WIN_START
 
-    # TODO: UPDATE THE TIMEOUT VARIABLE!!!
-
     window_fully_acked = False
-    while not (window_fully_acked and WIN_END == len(window)):
-        window_fully_acked = True
-        for packet_idx in range(WIN_START, WIN_END):
+    try:
+        while not (window_fully_acked and WIN_END == len(window)):
+            window_fully_acked = True
+            for packet_idx in range(WIN_START, WIN_END):
 
-# check to see if the beginning of the window has been ACKED and we aren't at the end of the window.
-# if we're not at the end of the window, then move the pointers over to the
-# right and proceed. If we're at the end, then we
-# must keep looping until the entire window is fully acked
-            if window[WIN_START]['ack'] and WIN_END < len(window):
-                WIN_START += 1
-                WIN_END += 1
+    # check to see if the beginning of the window has been ACKED and we aren't at the end of the window.
+    # if we're not at the end of the window, then move the pointers over to the
+    # right and proceed. If we're at the end, then we
+    # must keep looping until the entire window is fully acked
+                if window[WIN_START]['ack'] and WIN_END < len(window):
+                    WIN_START += 1
+                    WIN_END += 1
 
-                # send the newest packet
-                packet = packets[packet_idx]
-                # whatever, it's the sender
-                ACK_NUM = 0
-                ACK_FLAG = 1
-                # 1 if it's the last packet
-                FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
-                # TODO: make this real
-                sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, 0, packet)
-                checksum = checksum_verify(sumstring)
-                sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
-                try:
-                    transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
-                except socket.error, msg:
-                    print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-                    sys.exit()
-                # log the sent packet
-                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
-                source = socket.gethostbyname(socket.gethostname())
-                destination = recv_IP
-                write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
-                window_fully_acked = False
-                break
+                    # # send the newest packet
+                    # packet = packets[packet_idx]
+                    # # whatever, it's the sender
+                    # ACK_NUM = 0
+                    # ACK_FLAG = 1
+                    # # 1 if it's the last packet
+                    # FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
+                    # # TODO: make this real
+                    # sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                    #         ACK_FLAG, FIN_FLAG, window_size, 0, packet)
+                    # checksum = checksum_verify(sumstring)
+                    # sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                    #         ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
+                    # try:
+                    #     transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
+                    # except socket.error, msg:
+                    #     print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+                    #     finished = True
+                    #     sys.exit()
+                    # # log the sent packet
+                    # timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                    # source = socket.gethostbyname(socket.gethostname())
+                    # destination = recv_IP
+                    # write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
+                    window_fully_acked = False
+                    break
 
-            if not window[packet_idx]['ack']:
-                window_fully_acked = False
+                if not window[packet_idx]['ack']:
+                    window_fully_acked = False
 
-            # if packet hasn't been sent or packet timed out, (re)send packet
-            # TODO: maybe don't make this estimated_RTT
-            if window[packet_idx]['time'] is None or \
-                    time.time() - window[packet_idx]['time'] > timeout_interval:
-                packet = packets[packet_idx]
-                # whatever, it's the sender
-                ACK_NUM = 0
-                ACK_FLAG = 1
-                # 1 if it's the last packet
-                FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
-                sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, 0, packet)
-                checksum = checksum_verify(sumstring)
-                sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
-                # if retransmitting (which means that the 'time' has already been set
-                if window[packet_idx]['time'] is not None:
-                    TOTAL_SEGMENTS_RETRANSMITTED += 1
-                try:
-                    transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
-                except socket.error, msg:
-                    print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-                    sys.exit()
+                # if packet hasn't been sent or packet timed out, (re)send packet
+                # TODO: maybe don't make this estimated_RTT
+                if window[packet_idx]['time'] is None or \
+                        time.time() - window[packet_idx]['time'] > timeout_interval:
+                    packet = packets[packet_idx]
+                    # whatever, it's the sender
+                    ACK_NUM = 0
+                    ACK_FLAG = 1
+                    # 1 if it's the last packet
+                    FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
+                    sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                            ACK_FLAG, FIN_FLAG, window_size, 0, packet)
+                    checksum = checksum_verify(sumstring)
+                    sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                            ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
+                    # if retransmitting (which means that the 'time' has already been set
+                    if window[packet_idx]['time'] is not None:
+                        TOTAL_SEGMENTS_RETRANSMITTED += 1
+                    try:
+                        transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
+                    except socket.error, msg:
+                        print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+                        finished = True
+                        sys.exit()
 
-                # log the sent packet
-                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
-                source = socket.gethostbyname(socket.gethostname())
-                destination = recv_IP
-                write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
+                    # log the sent packet
+                    timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                    source = socket.gethostbyname(socket.gethostname())
+                    destination = recv_IP
+                    write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
 
+    except KeyboardInterrupt:
+        finished = True
+        sys.exit(1)
     finished = True
     print(('Delivery completed successfully\n'+
             'Total bytes sent: %d\n'+
             'Segments sent: %d\n'+
-            'Segments retransmitted: %d\n') % (TOTAL_BYTES_SENT, TOTAL_SEGMENTS_SENT, TOTAL_SEGMENTS_RETRANSMITTED))
+            'Segments retransmitted: %f\n') % (TOTAL_BYTES_SENT,
+                                               TOTAL_SEGMENTS_SENT,
+                                               float(TOTAL_SEGMENTS_RETRANSMITTED) / TOTAL_SEGMENTS_SENT))
 
 if __name__ == '__main__':
     main()

@@ -110,7 +110,12 @@ if __name__ == '__main__':
     except ValueError:
         print '<listening_port> should be an integrate.'
         sys.exit()
-    sender_IP = sys.argv[3]
+    try:
+        sender_IP = socket.gethostbyname(sys.argv[3])
+    except:
+        print 'sender_IP error'
+        sys.exit(1)
+
     try:
         sender_ack_port = int(sys.argv[4])
     except ValueError:
@@ -123,17 +128,13 @@ if __name__ == '__main__':
     # set up a UDP socket for sending ACKs
     UDP_ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # TODO: change this
-    # UDP_ACK_HOST = sender_IP
-    UDP_ACK_HOST = '127.0.0.1'
+    UDP_ACK_HOST = sender_IP
     UDP_ACK_PORT = sender_ack_port
     UDP_ACK_ADDR = (UDP_ACK_HOST, UDP_ACK_PORT)
 
     #To set up a UDP socket for receiving the data
     UDP_recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    # UDP_HOST = socket.gethostbyname(socket.gethostname())
-    # TODO: change this
-    UDP_RECV_HOST = '127.0.0.1'
-    # UDP_RECV_HOST = socket.gethostbyname(socket.gethostname())
+    UDP_RECV_HOST = socket.gethostbyname(socket.gethostname())
     UDP_RECV_PORT = listening_port
     UDP_RECV_ADDR = (UDP_RECV_HOST, UDP_RECV_PORT)
 
@@ -143,7 +144,6 @@ if __name__ == '__main__':
         print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
         sys.exit()
 
-    print '>> Waiting for sender invoking...'
     #Receive first data and check the packet
     receiveddata = UDP_recv_socket.recvfrom(1024)
     string_size = len(receiveddata[0]) - 20 # for the header
@@ -153,7 +153,6 @@ if __name__ == '__main__':
     ackflag, finflag = getflags(flagpart)
 
     # TODO: write the first data
-
     RCV_SEQ_NUM = 0
     while finflag != 1:
         receiveddata = UDP_recv_socket.recvfrom(1024)
