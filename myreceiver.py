@@ -2,7 +2,7 @@ import sys
 import socket
 import thread
 from threading import Thread
-import time
+from datetime import datetime
 from time import strftime
 import struct
 
@@ -31,6 +31,27 @@ def rft_header(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, win
             seq_num, ack_num, flagpart, window_size, checksum, option, datachunk)
 
     return header
+
+def write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ack_flag, fin_flag):
+    "To write log file after each sending"
+
+    # timestamp, source, destination, Sequence #, ACK #, and the flags
+
+    #Log line format
+    # logline = str(segment_num).ljust(10) + logdirection.ljust(20) + timestamp.ljust(22) + source.ljust(15) + destination.ljust(15) + str(sequence_num).ljust(11) + \
+              # str(ACK_num).ljust(7) + str(ackflag).ljust(5) + str(finflag).ljust(5) + trans_status.ljust(8) + '\r\n'
+    logline = str(timestamp).ljust(25) + source.ljust(20) + destination.ljust(20) + str(seq_num).ljust(10) + \
+              str(ack_num).ljust(10) + str(ack_flag).ljust(10) + str(fin_flag).ljust(10) + '\n'
+
+    #Check the output method (stdout or write to a log file)
+    if log_filename == 'stdout':
+        print logline
+    else:
+        try:
+            with open(log_filename, "a") as f:
+                f.write(logline)
+        except:
+            print 'Logfile I/O error'
 
 def checksum_verify(old_datagram):
     string_size = len(receiveddata[0]) - 20 # for the header
@@ -96,6 +117,8 @@ if __name__ == '__main__':
         print '<sender_ack_port> should be an integrate.'
         sys.exit()
     log_filename = sys.argv[5]
+    # write label line to logfile
+    write_logfile(log_filename, 'timestamp', 'source', 'destination', 'seq_num', 'ack_num', 'ack_flag', 'fin_flag')
 
     # set up a UDP socket for sending ACKs
     UDP_ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -144,19 +167,22 @@ if __name__ == '__main__':
         if checksum_verify(receiveddata[0]):
             # check the sequence number
             if seq_num == RCV_SEQ_NUM:
-            # source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datachunk
-                # packet = rft_header('127.0.0.1',
-                # increment receiver seq num
                 # TODO: make these real
                 ACK_FLAG = 1
                 FIN_FLAG = 0
+                # TODO: do the checksum here? not necessary
                 rft_checksum = 0
-                # RCV_SEQ_NUM = (RCV_SEQ_NUM + 1) % window_size
                 RCV_SEQ_NUM += 1
                 packet = ''
                 sendpacket = rft_header(recv_port, sender_port, RCV_SEQ_NUM,
                     seq_num, ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
 
+                # TODO: make sure that it sends NAKs
+                # log the packet just received
+                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                source = sender_IP
+                destination = socket.gethostbyname(socket.gethostname())
+                write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ackflag, finflag)
                 # write the data to the file
                 with open(filename, 'a') as f:
                     f.write(datachunk)
@@ -167,25 +193,53 @@ if __name__ == '__main__':
                 except socket.error, msg:
                     print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
                     sys.exit()
+                # log the ACK just sent
+                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                source = socket.gethostbyname(socket.gethostname())
+                destination = sender_IP
+                write_logfile(log_filename, timestamp, source, destination, RCV_SEQ_NUM, seq_num, ackflag, finflag)
+
 
             # TODO: make sure this works
             # if its a lower seq num than expected, just ACK
             elif seq_num < RCV_SEQ_NUM:
-                # send an ack for that
-                # ACK_FLAG = 1
-                # FIN_FLAG = 0
-                # rft_checksum = 0
-                # # RCV_SEQ_NUM = (RCV_SEQ_NUM + 1) % window_size
-                # RCV_SEQ_NUM += 1
-                # packet = ''
-                # sendpacket = rft_header(recv_port, sender_port, seq_num,
-                #     seq_num, ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
-                pass
+                ACK_FLAG = 1
+                FIN_FLAG = 0
+                rft_checksum = 0
+                packet = ''
+                sendpacket = rft_header(recv_port, sender_port, seq_num,
+                    seq_num, ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
 
-            # else drop the packet
+                # send the ACK
+                try:
+                    UDP_ack_socket.sendto(sendpacket, UDP_ACK_ADDR)
+                except socket.error, msg:
+                    print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+                    sys.exit()
+
+                # log the ACK just sent
+                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                source = socket.gethostbyname(socket.gethostname())
+                destination = sender_IP
+                write_logfile(log_filename, timestamp, source, destination, RCV_SEQ_NUM, seq_num, ackflag, finflag)
+
             else:
                 pass
 
         # else if checksum is bad
         else:
-            pass
+            # TODO: make these real
+            ACK_FLAG = 0
+            FIN_FLAG = 0
+            # TODO: do the checksum here? not necessary
+            rft_checksum = 0
+            packet = ''
+            sendpacket = rft_header(recv_port, sender_port, RCV_SEQ_NUM,
+                seq_num, ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
+            try:
+                UDP_ack_socket.sendto(sendpacket, UDP_ACK_ADDR)
+            except socket.error, msg:
+                print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
+                sys.exit()
+
+    print 'Delivery completed successfully'
