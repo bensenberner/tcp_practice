@@ -52,25 +52,15 @@ def checksum_verify(old_datagram):
 
     #Divide the string by 16 bits and calculate the sum
     for num in range(len(new_packet)):
-        if num % 2 == 0:     # Even parts with higher order
-            sum_calc = sum_calc + (ord(new_packet[num]) << 8)
-        elif num % 2 == 1:   # Odd parts with lower order
-            sum_calc = sum_calc + ord(new_packet[num])
+        if num % 2 == 0:    # Even parts with higher order
+            sum_calc += (ord(new_packet[num]) << 8)
+        else:               # Odd parts with lower order
+            sum_calc += ord(new_packet[num])
 
     # Get the inverse as the checksum
     output_sum = (sum_calc % 65536)
 
     return output_sum == checksum
-
-# def checksum_calc(header):
-#    csum=0
-#    for k in range(0,len(header),2):
-#        temp = (ord(str(header[k])) << 8) + (ord(recvdict[k+1]))
-#        csum = csum+temp
-#    csum = (csum>>16) + (csum&0xffff)
-#    csum = csum+(csum>>16)
-#    csum =~csum & 0xffff
-#    return csum
 
 def getflags(flags):
     if flags == 0:
@@ -110,6 +100,7 @@ if __name__ == '__main__':
     # set up a UDP socket for sending ACKs
     UDP_ack_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # TODO: change this
+    # UDP_ACK_HOST = sender_IP
     UDP_ACK_HOST = '127.0.0.1'
     UDP_ACK_PORT = sender_ack_port
     UDP_ACK_ADDR = (UDP_ACK_HOST, UDP_ACK_PORT)
@@ -119,7 +110,7 @@ if __name__ == '__main__':
     # UDP_HOST = socket.gethostbyname(socket.gethostname())
     # TODO: change this
     UDP_RECV_HOST = '127.0.0.1'
-    # UDP_HOST = socket.gethostbyname(socket.gethostname())
+    # UDP_RECV_HOST = socket.gethostbyname(socket.gethostname())
     UDP_RECV_PORT = listening_port
     UDP_RECV_ADDR = (UDP_RECV_HOST, UDP_RECV_PORT)
 
@@ -149,11 +140,7 @@ if __name__ == '__main__':
         (sender_port, recv_port, seq_num, ack_num, flagpart,
                 window_size, checksum, option, datachunk) = received
         ackflag, finflag = getflags(flagpart)
-
         # if checksum is good
-        ########################
-        # PLEASE MAKE SURE TO PROPERLY RENAME THE PORTS
-        #######################
         if checksum_verify(receiveddata[0]):
             # check the sequence number
             if seq_num == RCV_SEQ_NUM:

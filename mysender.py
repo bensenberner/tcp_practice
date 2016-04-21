@@ -168,15 +168,19 @@ def main():
 
     # UDP socket for SENDING DATA
     UDPsendsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # TODO: do not hardcode this
     UDP_SEND_HOST = recv_IP
+    UDP_SEND_HOST = '127.0.0.1'
     UDP_SEND_PORT = recv_port
     UDP_SEND_ADDR = (UDP_SEND_HOST, UDP_SEND_PORT)
 
     # UDP socket for RECEIVING ACKs
     UDPacksocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # TODO: do not hardcode this.
+    UDPackhost = '127.0.0.1'
+    UDP_ACK_ADDR = (UDPackhost, ack_port_num)
     try:
-        UDPacksocket.bind((UDP_SEND_HOST, ack_port_num))
+        UDPacksocket.bind(UDP_ACK_ADDR)
     except socket.error, msg:
         print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
         sys.exit()
@@ -203,7 +207,6 @@ def main():
     window_fully_acked = False
     while not (window_fully_acked and WIN_END == len(window)):
         window_fully_acked = True
-
         for packet_idx in range(WIN_START, WIN_END):
 
 # check to see if the beginning of the window has been ACKED and we aren't at the end of the window.
