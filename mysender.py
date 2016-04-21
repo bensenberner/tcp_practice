@@ -2,6 +2,7 @@ import sys
 import socket
 import thread
 import threading
+from datetime import datetime
 import time
 from time import strftime
 import struct
@@ -17,6 +18,15 @@ WIN_END = 0
 TOTAL_BYTES_SENT = 0
 TOTAL_SEGMENTS_SENT = 0
 TOTAL_SEGMENTS_RETRANSMITTED = 0
+alpha = 0.125
+beta = 0.25
+sample_RTT= 1
+estimated_RTT = 3
+dev_RTT= 0
+timeout_interval = estimated_RTT + 4 * dev_RTT
+finished = False
+
+# TODO TODO come up with more appropriate names for everything
 
 def readfile(filename):
     "To read the data that will be sent from the file"
@@ -38,32 +48,22 @@ def readfile(filename):
 
     return packets
 
-def write_logfile(segment_num, direction, timestamp, source, destination, sequence_num, ACK_num, ackflag, finflag, estimateRTT, timeout, trans_status, notes):
+def write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ack_flag, fin_flag, estimated_RTT):
     "To write log file after each sending"
 
-    # timestamp, source, destination, Sequence #, ACK #, and the flags, estimatedRTT
-    #Determine the writing direction
-    if direction == 'forward':
-        logdirection = 'Sender -> Receiver'
-    elif direction == 'backward':
-        logdirection = 'Receiver -> Sender'
-    else:
-        logdirection = direction
-
-    #Log line format
-    logline = str(segment_num).ljust(10) + logdirection.ljust(20) + timestamp.ljust(22) + source.ljust(15) + destination.ljust(15) + str(sequence_num).ljust(11) + \
-              str(ACK_num).ljust(7) + str(ackflag).ljust(5) + str(finflag).ljust(5) + str(estimateRTT).ljust(15) + str(timeout).ljust(15) + trans_status.ljust(15) + str(notes).ljust(10) + '\r\n'
+    # timestamp, source, destination, Sequence #, ACK #, and the flags, and est_rtt
+    logline = str(timestamp).ljust(25) + source.ljust(20) + destination.ljust(20) + str(seq_num).ljust(10) + \
+              str(ack_num).ljust(10) + str(ack_flag).ljust(10) + str(fin_flag).ljust(10) + str(estimated_RTT).ljust(16) + '\n'
 
     #Check the output method (stdout or write to a log file)
-    if rft_sender.log_filename == 'stdout.txt':
+    if log_filename == 'stdout':
         print logline
     else:
         try:
-            logfile = open (rft_sender.log_filename, "a")
+            with open(log_filename, "a") as f:
+                f.write(logline)
         except:
-            print 'File ERROR'
-        logfile.write(logline)
-        logfile.close()
+            print 'Logfile I/O error'
 
 def make_packet(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datapacket):
     "To pack the reliable file transfer data with TCP-like header"
@@ -116,18 +116,20 @@ def transmit_packet(packet, seq_num, UDPsendsocket, UDP_ADDR):
     window[seq_num]['time'] = time.time()
     connection_lock.release()
 
-def dealWithACK(ack_sock):
+def dealWithACK(ack_sock, recv_IP, log_filename):
     global connection_lock
     global MAXSEGMENTSIZE
     global packets
     global window
     global WIN_START
     global WIN_END
+    global alpha, beta, sample_RTT, estimated_RTT, dev_RTT, timeout_interval
+    global finished
 
     # TODO: make some kind of indicator to show when there are no more ACKs
     # to be received. Perhaps you should move the logic to increment the window
     # pointers to within here?
-    while True:
+    while not finished:
         # wait for an ACK message
         try:
             ACK = ack_sock.recvfrom(1024)
@@ -139,17 +141,26 @@ def dealWithACK(ack_sock):
         received = struct.unpack('!HHIIHHHH%ds' % string_size, ACK[0])
         (source_port, dest_port, seq_num, ack_num, flagpart,
                 window_size, checksum, option, datachunk) = received
-        ackflag, finflag = getflags(flagpart)
+        ack_flag, fin_flag = getflags(flagpart)
         # TODO: log the ACK/NAK
         # ACKed properly
-        if ackflag:
+        if ack_flag:
             connection_lock.acquire()
             window[ack_num]['ack'] = True
             connection_lock.release()
         # NAKed
         else:
             pass
+        sample_RTT = time.time() - window[ack_num]['time']
+        estimated_RTT = (1 - alpha) * estimated_RTT + alpha * sample_RTT
+        dev_RTT = (1 - beta) * dev_RTT + beta * abs(sample_RTT - estimated_RTT)
+        timeout_interval = estimated_RTT + 4 * dev_RTT
 
+        # log the ACK
+        timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+        source = recv_IP
+        destination = socket.gethostbyname(socket.gethostname())
+        write_logfile(log_filename, timestamp, source, destination, seq_num, ack_num, ack_flag, fin_flag, estimated_RTT)
 
 def checksum_verify(sumstring):
     "To verify the received data"
@@ -177,8 +188,12 @@ def main():
     global TOTAL_BYTES_SENT
     global TOTAL_SEGMENTS_SENT
     global TOTAL_SEGMENTS_RETRANSMITTED
+    global alpha, beta, sample_RTT, estimated_RTT, dev_RTT, timeout_interval
+    global finished
 
 
+    # TODO TODO TODO
+    # TODO: MAKE SURE ALL THESE PORTS ARE RIGHT AND RENAME THEM
     #Invoke the program to import <filename>, <recv_IP>, <recv_port>, <ack_port_num>, <log_filename> and <window_size>
     if(len(sys.argv) != 6 and len(sys.argv) != 7):
         print 'Please follow the format to invoke the program:'
@@ -210,6 +225,8 @@ def main():
     except:
         window_size = 1
 
+    # write the labels on the logfile
+    write_logfile(log_filename, 'timestamp', 'source', 'destination', 'seq_num', 'ack_num', 'ack_flag', 'fin_flag', 'est_RTT')
     # UDP socket for SENDING DATA
     UDPsendsocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # TODO: do not hardcode this
@@ -229,8 +246,8 @@ def main():
         print 'Bind failed. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
         sys.exit()
     # send it into its own thread
-    ack_thread = threading.Thread(target = dealWithACK, args = (UDPacksocket,))
-    ack_thread.setDaemon(True)
+    ack_thread = threading.Thread(target = dealWithACK, args = (UDPacksocket, recv_IP, log_filename))
+    # ack_thread.setDaemon(True)
     ack_thread.start()
 
     # TODO: checksum shit
@@ -245,8 +262,6 @@ def main():
     WIN_END = window_size - WIN_START
 
     # TODO: UPDATE THE TIMEOUT VARIABLE!!!
-    # this is in seconds
-    TIME_OUT = 3
 
     window_fully_acked = False
     while not (window_fully_acked and WIN_END == len(window)):
@@ -279,6 +294,11 @@ def main():
                 except socket.error, msg:
                     print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
                     sys.exit()
+                # log the sent packet
+                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                source = socket.gethostbyname(socket.gethostname())
+                destination = recv_IP
+                write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
                 window_fully_acked = False
                 break
 
@@ -286,8 +306,9 @@ def main():
                 window_fully_acked = False
 
             # if packet hasn't been sent or packet timed out, (re)send packet
+            # TODO: maybe don't make this estimated_RTT
             if window[packet_idx]['time'] is None or \
-                    time.time() - window[packet_idx]['time'] > TIME_OUT:
+                    time.time() - window[packet_idx]['time'] > timeout_interval:
                 packet = packets[packet_idx]
                 # whatever, it's the sender
                 ACK_NUM = 0
@@ -308,6 +329,13 @@ def main():
                     print 'Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
                     sys.exit()
 
+                # log the sent packet
+                timestamp = datetime.now().strftime("%m/%d/%y %H:%M:%S.%f")
+                source = socket.gethostbyname(socket.gethostname())
+                destination = recv_IP
+                write_logfile(log_filename, timestamp, source, destination, packet_idx, ACK_NUM, ACK_FLAG, FIN_FLAG, estimated_RTT)
+
+    finished = True
     print(('Delivery completed successfully\n'+
             'Total bytes sent: %d\n'+
             'Segments sent: %d\n'+
