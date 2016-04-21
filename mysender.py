@@ -111,6 +111,22 @@ def dealWithACK(ack_sock):
             window[ack_num]['ack'] = True
             connection_lock.release()
 
+def checksum_verify(sumstring):
+    "To verify the received data"
+    sum_calc = 0
+
+    #Divide the string by 16 bits and calculate the sum
+    for num in range(len(sumstring)):
+        if num % 2 == 0:     # Even parts with higher order
+            sum_calc = sum_calc + (ord(sumstring[num]) << 8)
+        elif num % 2 == 1:   # Odd parts with lower order
+            sum_calc = sum_calc + ord(sumstring[num])
+
+    # Get the inverse as the checksum
+    output_sum = (sum_calc % 65536)
+
+    return output_sum
+
 def main():
     global connection_lock
     global MAXSEGMENTSIZE
@@ -169,7 +185,7 @@ def main():
     ack_thread.setDaemon(True)
     ack_thread.start()
 
-    # TODO
+    # TODO: checksum shit
     # sumstring = make_packet(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, 0, rft_sender.total_sending_message[SENDINGPOINTER])
     # rft_checksum = checksum_calc(sumstring)
     # sendpacket = make_packet(rft_sender.recv_port, rft_sender.ack_port_num, SEQUENCE_NUM, ACK_NUM, 1, 0, rft_checksum, rft_sender.total_sending_message[SENDINGPOINTER])
@@ -206,9 +222,12 @@ def main():
                 # 1 if it's the last packet
                 FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
                 # TODO: make this real
-                rft_checksum = 0
+                sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                        ACK_FLAG, FIN_FLAG, window_size, 0, packet)
+                checksum = checksum_verify(sumstring)
+                print(checksum)
                 sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
+                        ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
                 try:
                     transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
                 except socket.error, msg:
@@ -230,9 +249,12 @@ def main():
                 # 1 if it's the last packet
                 FIN_FLAG = 0 if packet_idx < len(packets) - 1 else 1
                 # TODO: make this real
-                rft_checksum = 0
+                sumstring =  make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
+                        ACK_FLAG, FIN_FLAG, window_size, 0, packet)
+                checksum = checksum_verify(sumstring)
+                print(checksum)
                 sendpacket = make_packet(ack_port_num, recv_port, packet_idx, ACK_NUM,
-                        ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
+                        ACK_FLAG, FIN_FLAG, window_size, checksum, packet)
                 try:
                     transmit_packet(sendpacket, packet_idx, UDPsendsocket, UDP_SEND_ADDR)
                 except socket.error, msg:

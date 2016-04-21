@@ -27,10 +27,50 @@ def rft_header(source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, win
 
     option = 0
     #To pack the header in a size of 20 bytes header and MAXSEGMENTSIZE of segment
-    header = struct.pack('!HHIIHHHH%ds' % \ len(datachunk), source_port, dest_port,
+    header = struct.pack('!HHIIHHHH%ds' % len(datachunk), source_port, dest_port,
             seq_num, ack_num, flagpart, window_size, checksum, option, datachunk)
 
     return header
+
+def checksum_verify(old_datagram):
+    string_size = len(receiveddata[0]) - 20 # for the header
+    received = struct.unpack('!HHIIHHHH%ds' % string_size, receiveddata[0])
+    (sender_port, recv_port, seq_num, ack_num, flagpart,
+            window_size, checksum, option, datachunk) = received
+
+    string_size = len(old_datagram) - 20 # for the header
+    original_packet = struct.unpack('!HHIIHHHH%ds' % string_size, old_datagram)
+    (sender_port, recv_port, seq_num, ack_num, flagpart,
+            window_size, checksum, option, datachunk) = original_packet
+
+    # set checksum to 0 to reconstruct original checksum calculation
+    new_packet = struct.pack('!HHIIHHHH%ds' % string_size, sender_port, recv_port,
+            seq_num, ack_num, flagpart, window_size, 0, option, datachunk)
+
+    "To verify the received data"
+    sum_calc = 0
+
+    #Divide the string by 16 bits and calculate the sum
+    for num in range(len(new_packet)):
+        if num % 2 == 0:     # Even parts with higher order
+            sum_calc = sum_calc + (ord(new_packet[num]) << 8)
+        elif num % 2 == 1:   # Odd parts with lower order
+            sum_calc = sum_calc + ord(new_packet[num])
+
+    # Get the inverse as the checksum
+    output_sum = (sum_calc % 65536)
+
+    return output_sum == checksum
+
+# def checksum_calc(header):
+#    csum=0
+#    for k in range(0,len(header),2):
+#        temp = (ord(str(header[k])) << 8) + (ord(recvdict[k+1]))
+#        csum = csum+temp
+#    csum = (csum>>16) + (csum&0xffff)
+#    csum = csum+(csum>>16)
+#    csum =~csum & 0xffff
+#    return csum
 
 def getflags(flags):
     if flags == 0:
@@ -97,6 +137,7 @@ if __name__ == '__main__':
     (sender_port, recv_port, seq_num, ack_num, flagpart,
             window_size, checksum, option, datachunk) = received
     ackflag, finflag = getflags(flagpart)
+
     # TODO: write the first data
 
     RCV_SEQ_NUM = 0
@@ -109,13 +150,11 @@ if __name__ == '__main__':
                 window_size, checksum, option, datachunk) = received
         ackflag, finflag = getflags(flagpart)
 
-        # do the checksum shit
-        checksum = True
         # if checksum is good
         ########################
         # PLEASE MAKE SURE TO PROPERLY RENAME THE PORTS
         #######################
-        if checksum:
+        if checksum_verify(receiveddata[0]):
             # check the sequence number
             if seq_num == RCV_SEQ_NUM:
             # source_port, dest_port, seq_num, ack_num, ACK_flag, FIN_flag, window_size, checksum, datachunk
@@ -146,6 +185,14 @@ if __name__ == '__main__':
             # if its a lower seq num than expected, just ACK
             elif seq_num < RCV_SEQ_NUM:
                 # send an ack for that
+                # ACK_FLAG = 1
+                # FIN_FLAG = 0
+                # rft_checksum = 0
+                # # RCV_SEQ_NUM = (RCV_SEQ_NUM + 1) % window_size
+                # RCV_SEQ_NUM += 1
+                # packet = ''
+                # sendpacket = rft_header(recv_port, sender_port, seq_num,
+                #     seq_num, ACK_FLAG, FIN_FLAG, window_size, rft_checksum, packet)
                 pass
 
             # else drop the packet
